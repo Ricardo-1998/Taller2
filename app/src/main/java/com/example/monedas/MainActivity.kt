@@ -1,9 +1,11 @@
 package com.example.monedas
 
+import android.content.ContentValues
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.AsyncTask
 import android.os.Bundle
+import android.provider.BaseColumns
 import android.support.design.widget.Snackbar
 import android.support.design.widget.NavigationView
 import android.support.v4.app.Fragment
@@ -14,9 +16,12 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
 import com.example.monedas.Adapters.AppConstants
+import com.example.monedas.Adapters.CoinAdapter
 import com.example.monedas.Network.NetworkUtils
 import com.example.monedas.Tools.AllCoins
 import com.example.monedas.Tools.Moneda
+import com.example.monedas.data.Database
+import com.example.monedas.data.DatabaseContract
 import com.example.monedas.fragments.mainContent
 import com.example.monedas.fragments.mainList
 import com.google.gson.Gson
@@ -27,6 +32,8 @@ import java.io.IOException
 
 class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener
         , mainList.SearchNewMovieListener {
+
+    var dbHelper = Database(this)
 
     private lateinit var mainFragment : mainList
     private lateinit var mainContentFragment: mainContent
@@ -49,14 +56,17 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_main)
         coinsList = savedInstanceState?.getParcelableArrayList(AppConstants.dataset_saveinstance_key) ?: ArrayList()
         setSupportActionBar(toolbar)
 
         fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null).show()
+            searchAllMovie()
+            val db = dbHelper.writableDatabase
+            db.delete(DatabaseContract.MonedaEntry.TABLE_NAME,null,null)
         }
+
 
         val toggle = ActionBarDrawerToggle(
             this, drawer_layout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close
@@ -67,7 +77,133 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         nav_view.setNavigationItemSelectedListener(this)
 
         initMainFragment()
+
+
         searchAllMovie()
+        val db = dbHelper.writableDatabase
+        db.delete(DatabaseContract.MonedaEntry.TABLE_NAME,null,null)
+    }
+
+    private fun WriteInDatabase(Coin: ArrayList<Moneda>){
+        val db = dbHelper.writableDatabase
+        for(item in Coin){
+            var values = ContentValues().apply {
+                put(DatabaseContract.MonedaEntry.COLUMN_NAME, item.name)
+                put(DatabaseContract.MonedaEntry.COLUMN_COUNTRY, item.country)
+                put(DatabaseContract.MonedaEntry.COLUMN_VALUE, item.value)
+                put(DatabaseContract.MonedaEntry.COLUMN_VALUE_US, item.value_us)
+                put(DatabaseContract.MonedaEntry.COLUMN_REVIEW, item.review)
+                put(DatabaseContract.MonedaEntry.COLUMN_AVAILABLE, item.isAvailable)
+                put(DatabaseContract.MonedaEntry.COLUMN_IMG, item.img)
+            }
+            var newRowId = db?.insert(DatabaseContract.MonedaEntry.TABLE_NAME, null, values)
+            if (newRowId == -1L) {
+                Toast.makeText(this@MainActivity, "No se ha podido guardar", Toast.LENGTH_SHORT)
+            } else {
+                Toast.makeText(this@MainActivity, "Se ha podido guardar", Toast.LENGTH_SHORT)
+                mainFragment.updateCoinsAdapter(ReadCoins())
+            }
+        }
+
+    }
+
+    private fun CoinsByCountry(country:String){
+        val db = dbHelper.readableDatabase
+
+        val projection = arrayOf(
+            BaseColumns._ID,
+            DatabaseContract.MonedaEntry.COLUMN_NAME,
+            DatabaseContract.MonedaEntry.COLUMN_COUNTRY,
+            DatabaseContract.MonedaEntry.COLUMN_VALUE,
+            DatabaseContract.MonedaEntry.COLUMN_VALUE_US,
+            DatabaseContract.MonedaEntry.COLUMN_REVIEW,
+            DatabaseContract.MonedaEntry.COLUMN_AVAILABLE,
+            DatabaseContract.MonedaEntry.COLUMN_IMG
+        )
+
+        val sortOrder = "${DatabaseContract.MonedaEntry.COLUMN_NAME} DESC"
+        val where = "country = '$country'"
+
+        val cursor = db.query(
+            DatabaseContract.MonedaEntry.TABLE_NAME, // nombre de la tabla
+            projection, // columnas que se devolverán
+            where, // Columns where clausule
+            null, // values Where clausule
+            null, // Do not group rows
+            null, // do not filter by row
+            sortOrder // sort order
+        )
+
+        var lista = ArrayList<Moneda>()
+
+        with(cursor) {
+            while (moveToNext()) {
+                var coin = Moneda(
+                    getString(getColumnIndexOrThrow(BaseColumns._ID)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_NAME)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_COUNTRY)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_VALUE)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_VALUE_US)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_REVIEW)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_AVAILABLE)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_IMG))
+                )
+
+                lista.add(coin)
+            }
+        }
+
+        mainFragment.updateCoinsAdapter(lista)
+
+    }
+
+    private fun ReadCoins() : ArrayList<Moneda>{
+        val db = dbHelper.readableDatabase
+
+        val projection = arrayOf(
+            BaseColumns._ID,
+            DatabaseContract.MonedaEntry.COLUMN_NAME,
+            DatabaseContract.MonedaEntry.COLUMN_COUNTRY,
+            DatabaseContract.MonedaEntry.COLUMN_VALUE,
+            DatabaseContract.MonedaEntry.COLUMN_VALUE_US,
+            DatabaseContract.MonedaEntry.COLUMN_REVIEW,
+            DatabaseContract.MonedaEntry.COLUMN_AVAILABLE,
+            DatabaseContract.MonedaEntry.COLUMN_IMG
+        )
+
+        val sortOrder = "${DatabaseContract.MonedaEntry.COLUMN_NAME} DESC"
+
+        val cursor = db.query(
+            DatabaseContract.MonedaEntry.TABLE_NAME, // nombre de la tabla
+            projection, // columnas que se devolverán
+            null, // Columns where clausule
+            null, // values Where clausule
+            null, // Do not group rows
+            null, // do not filter by row
+            sortOrder // sort order
+        )
+
+        var lista = ArrayList<Moneda>()
+
+        with(cursor) {
+            while (moveToNext()) {
+                var coin = Moneda(
+                    getString(getColumnIndexOrThrow(BaseColumns._ID)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_NAME)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_COUNTRY)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_VALUE)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_VALUE_US)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_REVIEW)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_AVAILABLE)),
+                    getString(getColumnIndexOrThrow(DatabaseContract.MonedaEntry.COLUMN_IMG))
+                )
+
+                lista.add(coin)
+            }
+        }
+
+        return lista
+
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -92,12 +228,6 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     private fun changeFragment(id: Int, frag: Fragment){ supportFragmentManager.beginTransaction().replace(id, frag).commit() }
 
-
-    fun addCoinToList(Coin: ArrayList<Moneda>) {
-        coinsList.addAll(Coin)
-        mainFragment.updateCoinsAdapter(coinsList)
-    }
-
     fun searchAllMovie(){
         FetchCoins().execute()
     }
@@ -116,12 +246,12 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
         override fun onPostExecute(coinInfo: String) {
             super.onPostExecute(coinInfo)
-            coinsList.clear()
-            if (!coinInfo.isEmpty()) {
+            if (coinInfo.isNotEmpty()) {
                 val coinJSON = JSONObject(coinInfo)
                 if (coinJSON.getString("ok") == "true") {
                     val coin = Gson().fromJson<AllCoins>(coinInfo, AllCoins::class.java)
-                    addCoinToList(coin.coins)
+                    //addCoinToList(coin.coins)
+                    WriteInDatabase(coin.coins)
                 } else {
                     Toast.makeText(this@MainActivity, "No existe en la base de datos,", Toast.LENGTH_LONG).show()
                 }
@@ -161,19 +291,20 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         when (item.itemId) {
             R.id.nav_all -> {
                 searchAllMovie()
+                val db = dbHelper.writableDatabase
+                db.delete(DatabaseContract.MonedaEntry.TABLE_NAME,null,null)
             }
             R.id.nav_el_salvador -> {
-
+                CoinsByCountry("El Salvador")
             }
             R.id.nav_guatemala -> {
-
-
+                CoinsByCountry("Guatemala")
             }
             R.id.nav_panama -> {
-
+                CoinsByCountry("Panama")
             }
             R.id.nav_costa_rica -> {
-
+                CoinsByCountry("Costa Rica")
             }
             R.id.nav_share -> {
 

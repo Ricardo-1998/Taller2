@@ -5,6 +5,7 @@ import android.os.Parcelable
 
 
 data class Moneda (
+        val _id:String = "N/A",
         val name:String = "N/A",
         val country:String = "N/A",
         val value: String = "N/A",
@@ -14,6 +15,7 @@ data class Moneda (
         val img:String = "N/A"
 ) : Parcelable {
     constructor(parcel: Parcel) : this(
+            _id = parcel.readString(),
             name = parcel.readString(),
             country = parcel.readString(),
             value = parcel.readString(),
@@ -22,6 +24,7 @@ data class Moneda (
             img = parcel.readString())
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
+        parcel.writeString(_id)
         parcel.writeString(name)
         parcel.writeString(country)
         parcel.writeString(value)
